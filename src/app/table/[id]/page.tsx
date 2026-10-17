@@ -34,6 +34,9 @@ function MenuContent() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Naya State: Mobile Tab Switcher
+  const [mobileTab, setMobileTab] = useState<"menu" | "ordered">("menu");
 
   useEffect(() => {
     if (!orderId) {
@@ -97,7 +100,7 @@ function MenuContent() {
     const { error } = await supabase.from("order_items").insert(itemsToInsert);
 
     if (error) {
-      alert("Error sending KOT to kitchen!");
+      alert("Error sending KOT!");
       setIsSubmitting(false);
       return;
     }
@@ -135,57 +138,75 @@ function MenuContent() {
 
   return (
     <>
-      {/* Edge-to-edge Header */}
-      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 sticky top-0 z-20 flex justify-between items-center shadow-sm">
-        <div>
-          <h1 className="text-xl md:text-2xl font-black text-slate-900">Table {tableId?.slice(0,4)}...</h1>
-          <p className="text-xs md:text-sm font-bold text-emerald-600 uppercase tracking-wide">Active Order</p>
+      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 sticky top-0 z-20 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900">Table {tableId?.slice(0,4).toUpperCase()}</h1>
+            <p className="text-xs font-bold text-emerald-600 uppercase tracking-wide">Active Order</p>
+          </div>
+          <button onClick={() => router.push("/")} className="text-slate-600 font-bold bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors text-sm">
+            Back
+          </button>
         </div>
-        <button onClick={() => router.push("/")} className="text-slate-600 font-bold bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
-          Back
-        </button>
+
+        {/* MOBILE TABS (Hidden on Desktop) */}
+        <div className="flex lg:hidden bg-slate-100 p-1 rounded-xl">
+          <button 
+            onClick={() => setMobileTab("menu")} 
+            className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${mobileTab === "menu" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}
+          >
+            Menu
+          </button>
+          <button 
+            onClick={() => setMobileTab("ordered")} 
+            className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${mobileTab === "ordered" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}
+          >
+            Ordered ({existingOrders.length})
+          </button>
+        </div>
       </header>
 
-      {/* Main Content Area - Fluid Width */}
-      <div className="px-4 md:px-6 mt-6 flex flex-col lg:flex-row gap-6 xl:gap-10">
+      <div className="px-3 md:px-6 mt-4 flex flex-col lg:flex-row gap-6 xl:gap-10 pb-32">
         
-        {/* LEFT SIDE: Menu & Search */}
-        <div className="flex-1 w-full max-w-4xl mx-auto lg:mx-0">
+        {/* LEFT SIDE: Menu (Hidden on mobile if "ordered" tab is active) */}
+        <div className={`flex-1 w-full max-w-4xl mx-auto lg:mx-0 ${mobileTab === "menu" ? "block" : "hidden lg:block"}`}>
           <input 
             type="text" 
             placeholder="Search for Paneer, Dal, etc..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-slate-200 text-slate-900 font-medium py-3.5 px-5 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-8"
+            className="w-full bg-white border border-slate-200 text-slate-900 font-medium py-3 px-4 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-6 text-sm"
           />
 
           {Object.entries(groupedMenu).map(([category, items]) => (
-            <div key={category} className="mb-8">
-              <h2 className="text-xl font-black text-slate-900 mb-4">{category}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div key={category} className="mb-6">
+              <h2 className="text-lg font-black text-slate-900 mb-3 px-1">{category}</h2>
+              
+              {/* MOBILE: 2 Columns Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {items.map((item) => {
                   const qty = cart[item.id] || 0;
                   return (
-                    <div key={item.id} className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-start ${!item.is_available ? 'opacity-50 grayscale' : ''}`}>
-                      <div className="pr-4">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-slate-800 leading-tight">{item.name}</h3>
-                          {!item.is_available && <span className="text-[10px] font-black uppercase text-rose-500 bg-rose-50 px-2 py-0.5 rounded-sm">Sold Out</span>}
+                    <div key={item.id} className={`bg-white p-3 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between ${!item.is_available ? 'opacity-50 grayscale' : ''}`}>
+                      <div className="mb-3">
+                        <div className="flex flex-col gap-1 mb-1">
+                          <h3 className="font-bold text-slate-800 text-sm leading-snug">{item.name}</h3>
+                          {!item.is_available && <span className="text-[9px] font-black uppercase text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded w-max">Sold Out</span>}
                         </div>
-                        <p className="text-slate-500 font-semibold text-sm">₹{item.price}</p>
+                        <p className="text-slate-500 font-bold text-xs">₹{item.price}</p>
                       </div>
                       
                       {item.is_available && (
-                        <div className="flex-shrink-0 mt-1">
+                        <div className="mt-auto">
                           {qty === 0 ? (
-                            <button onClick={() => updateQty(item.id, 1)} className="bg-emerald-50 text-emerald-700 px-5 py-1.5 rounded-lg font-extrabold text-sm hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-sm w-20">
+                            <button onClick={() => updateQty(item.id, 1)} className="w-full bg-emerald-50 text-emerald-700 py-1.5 rounded-lg font-black text-xs border border-emerald-200 hover:bg-emerald-100 transition-colors">
                               ADD
                             </button>
                           ) : (
-                            <div className="flex items-center bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm overflow-hidden w-20 h-8">
-                              <button onClick={() => updateQty(item.id, -1)} className="flex-1 h-full flex items-center justify-center text-emerald-700 font-extrabold hover:bg-emerald-100 transition-colors">-</button>
+                            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden h-8">
+                              <button onClick={() => updateQty(item.id, -1)} className="w-8 h-full flex items-center justify-center text-emerald-700 font-black hover:bg-emerald-100">-</button>
                               <span className="font-black text-emerald-700 text-sm">{qty}</span>
-                              <button onClick={() => updateQty(item.id, 1)} className="flex-1 h-full flex items-center justify-center text-emerald-700 font-extrabold hover:bg-emerald-100 transition-colors">+</button>
+                              <button onClick={() => updateQty(item.id, 1)} className="w-8 h-full flex items-center justify-center text-emerald-700 font-black hover:bg-emerald-100">+</button>
                             </div>
                           )}
                         </div>
@@ -199,8 +220,8 @@ function MenuContent() {
           {Object.keys(groupedMenu).length === 0 && <p className="text-slate-400 font-medium text-center py-10">No items match your search.</p>}
         </div>
 
-        {/* RIGHT SIDE: Already Ordered Items */}
-        <div className="w-full lg:w-96 flex-shrink-0">
+        {/* RIGHT SIDE: Already Ordered (Hidden on mobile if "menu" tab is active) */}
+        <div className={`w-full lg:w-96 flex-shrink-0 ${mobileTab === "ordered" ? "block" : "hidden lg:block"}`}>
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 lg:sticky lg:top-24">
             <h2 className="font-black text-slate-900 mb-4 text-lg border-b border-slate-100 pb-3">Sent to Kitchen</h2>
             {existingOrders.length === 0 ? (
@@ -215,10 +236,10 @@ function MenuContent() {
                     </span>
                     <button 
                       onClick={() => toggleServeStatus(order.id, order.status)}
-                      className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${
+                      className={`text-[11px] uppercase tracking-wide px-3 py-1.5 rounded-lg font-black transition-all ${
                         order.status === 'served' 
-                          ? 'bg-slate-200 text-slate-500' 
-                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-sm'
+                          ? 'bg-slate-200 text-slate-400' 
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
                       }`}
                     >
                       {order.status === 'served' ? 'Served' : 'Serve'}
@@ -238,9 +259,9 @@ function MenuContent() {
           <button 
             onClick={sendKOT}
             disabled={isSubmitting}
-            className="w-full max-w-7xl mx-auto bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-black text-lg py-4 rounded-2xl shadow-lg transition-transform active:scale-[0.98] flex justify-between items-center px-6"
+            className="w-full max-w-7xl mx-auto bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-black text-base md:text-lg py-4 rounded-2xl shadow-lg transition-transform active:scale-[0.98] flex justify-between items-center px-6"
           >
-            <span>{totalItems} Items Added</span>
+            <span>{totalItems} New Items</span>
             <span>Send KOT (₹{cartTotal}) ➔</span>
           </button>
         </div>
