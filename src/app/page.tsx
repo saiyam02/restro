@@ -168,7 +168,7 @@ export default function WaiterDashboard() {
                   onClick={() => routeWithOrder("table")}
                   className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300 font-bold text-lg py-4 rounded-2xl shadow-sm transition-colors"
                 >
-                  Open Menu / Send KOT
+                  🍽️ Open Menu / Add Items
                 </button>
                 <button
                   onClick={() => routeWithOrder("checkout")}

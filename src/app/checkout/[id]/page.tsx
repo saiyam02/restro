@@ -54,15 +54,34 @@ function CheckoutContent() {
     setLoading(false);
   }
 
-  async function handleSettleBill() {
-    setIsSettle(true);
+ async function handleSettleBill() {
+    setIsSettle(true); // Button grey out hoga
     
-    await supabase.from("orders").update({ status: "paid" }).eq("id", orderId);
-    await supabase.from("tables").update({ status: "empty" }).eq("id", tableId);
+    // 1. Order status update karo
+    const { error: orderError } = await supabase
+      .from("orders")
+      .update({ status: "paid" })
+      .eq("id", orderId);
 
+    // 2. Table status update karo
+    const { error: tableError } = await supabase
+      .from("tables")
+      .update({ status: "empty" })
+      .eq("id", tableId);
+
+    // Agar dono mein se kisi mein bhi error aaya:
+    if (orderError || tableError) {
+      console.error("Order Error:", orderError);
+      console.error("Table Error:", tableError);
+      alert(`Database Error: ${orderError?.message || tableError?.message}`);
+      
+      setIsSettle(false); // <-- YEH SABSE ZAROORI HAI: Error aane par button wapas active ho jayega
+      return;
+    }
+
+    // Success!
     router.push("/");
   }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
