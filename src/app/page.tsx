@@ -19,6 +19,24 @@ export default function WaiterDashboard() {
 
   useEffect(() => {
     fetchTables();
+
+    // Real-Time Listener Setup
+    const channel = supabase
+      .channel('tables_channel')
+      .on(
+        'postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'tables' }, 
+        (payload) => {
+          console.log("Real-time update received!", payload);
+          fetchTables(); // Jab bhi koi table update ho, grid refresh kar do
+        }
+      )
+      .subscribe();
+
+    // Cleanup when component unmounts
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   async function fetchTables() {
