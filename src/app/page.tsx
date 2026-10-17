@@ -13,30 +13,10 @@ type Table = {
 export default function WaiterDashboard() {
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  
   const router = useRouter();
 
   useEffect(() => {
     fetchTables();
-
-    // Real-Time Listener Setup
-    const channel = supabase
-      .channel('tables_channel')
-      .on(
-        'postgres_changes', 
-        { event: 'UPDATE', schema: 'public', table: 'tables' }, 
-        (payload) => {
-          console.log("Real-time update received!", payload);
-          fetchTables(); // Jab bhi koi table update ho, grid refresh kar do
-        }
-      )
-      .subscribe();
-
-    // Cleanup when component unmounts
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   async function fetchTables() {
@@ -54,133 +34,107 @@ export default function WaiterDashboard() {
     setLoading(false);
   }
 
-  // 1. Strict 'One Active Order' logic
-  async function handleOpenTable(table: Table) {
-    if (table.status !== "empty") return;
+  async function handleOpenTable(tableId: string) {
+    // 1. Mark table as occupied
+    await supabase.from("tables").update({ status: "occupied" }).eq("id", tableId);
+    
+    // 2. Create the active order session immediately
+    await supabase.from("orders").insert([{ table_id: tableId, status: "active" }]);
 
-    // Pehle check karo ki galti se koi purana active order atka toh nahi hai
-    const { data: existingOrder } = await supabase
-      .from("orders")
-      .select("id")
-      .eq("table_id", table.id)
-      .eq("status", "active")
-      .maybeSingle(); // .maybeSingle() crash nahi karta agar order na mile
-
-    // Agar active order nahi hai, sirf tabhi NAYA order banao
-    if (!existingOrder) {
-      await supabase.from("orders").insert([{ table_id: table.id, status: "active" }]);
-    }
-
-    // Table ko occupied mark karo
-    await supabase.from("tables").update({ status: "occupied" }).eq("id", table.id);
-    setSelectedTable(null);
-    fetchTables();
+    fetchTables(); // Refresh the grid
   }
 
-  // 2. Route helper
-  async function routeWithOrder(path: "table" | "checkout") {
-    if (!selectedTable) return;
-    
+  async function routeWithOrder(tableId: string, path: "table" | "checkout") {
     const { data, error } = await supabase
       .from("orders")
       .select("id")
-      .eq("table_id", selectedTable.id)
+      .eq("table_id", tableId)
       .eq("status", "active")
-      .single(); // Ab hum confidently .single() use kar sakte hain
+      .order("created_at", { ascending: false })
+      .limit(1);
     
-    if (error || !data) {
-      alert("Error: Is table ka koi active order nahi hai.");
+    if (error || !data || data.length === 0) {
+      alert("Error: No active order found for this table.");
       return;
     }
 
-    router.push(`/${path}/${selectedTable.id}?orderId=${data.id}`);
-    setSelectedTable(null);
+    router.push(`/${path}/${tableId}?orderId=${data[0].id}`);
   }
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
         <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-slate-500 font-medium">Syncing tables...</p>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <header className="mb-10">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Restaurant POS</h1>
-        <p className="text-slate-500 mt-1 font-medium">Select a table to manage orders</p>
-        
-        <div className="flex gap-4 mt-4">
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-            <span className="text-sm font-medium text-slate-600">Available</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-rose-500"></span>
-            <span className="text-sm font-medium text-slate-600">Occupied</span>
-          </div>
-        </div>
+    <main className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      <header className="mb-8">
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Restaurant POS</h1>
+        <p className="text-slate-500 mt-1 font-medium">Fast action dashboard</p>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+      {/* Grid showing tables with INLINE buttons */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
         {tables.map((table) => (
-          <button
+          <div
             key={table.id}
-            onClick={() => setSelectedTable(table)}
-            className={`relative h-32 rounded-2xl flex flex-col items-center justify-center transition-all duration-200 shadow-sm hover:shadow-md active:scale-95 border-2 ${
+            className={`flex flex-col justify-between p-4 rounded-3xl border-2 transition-all shadow-sm bg-white ${
               table.status === "empty"
-                ? "bg-white border-emerald-100 hover:border-emerald-300"
-                : "bg-rose-50 border-rose-200 hover:border-rose-300"
+                ? "border-emerald-100 hover:border-emerald-300"
+                : "border-rose-100 bg-rose-50/30 hover:border-rose-300"
             }`}
           >
-            <div className={`absolute top-3 right-3 w-2.5 h-2.5 rounded-full ${table.status === "empty" ? "bg-emerald-500" : "bg-rose-500"}`}></div>
-            <span className={`text-4xl font-bold ${table.status === "empty" ? "text-slate-700" : "text-rose-700"}`}>{table.name}</span>
-            <span className={`text-xs font-semibold mt-2 uppercase tracking-wider ${table.status === "empty" ? "text-emerald-600" : "text-rose-600"}`}>{table.status}</span>
-          </button>
+            {/* Table Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <span className={`text-3xl font-black block leading-none ${
+                  table.status === "empty" ? "text-slate-800" : "text-rose-700"
+                }`}>
+                  {table.name}
+                </span>
+                <span className={`text-[10px] font-bold uppercase tracking-widest mt-1.5 block ${
+                  table.status === "empty" ? "text-emerald-500" : "text-rose-500"
+                }`}>
+                  {table.status}
+                </span>
+              </div>
+              <div className={`w-3 h-3 rounded-full shadow-inner ${
+                table.status === "empty" ? "bg-emerald-500" : "bg-rose-500 animate-pulse"
+              }`}></div>
+            </div>
+
+            {/* Inline Action Buttons */}
+            <div className="mt-auto">
+              {table.status === "empty" ? (
+                <button
+                  onClick={() => handleOpenTable(table.id)}
+                  className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold py-3 rounded-2xl transition-colors text-sm border border-emerald-200 shadow-sm active:scale-95"
+                >
+                  Occupy Table
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => routeWithOrder(table.id, "table")}
+                    className="flex-1 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3 rounded-2xl transition-colors text-sm border border-slate-200 shadow-sm active:scale-95"
+                  >
+                    📝 Menu
+                  </button>
+                  <button
+                    onClick={() => routeWithOrder(table.id, "checkout")}
+                    className="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-3 rounded-2xl transition-colors text-sm shadow-sm active:scale-95"
+                  >
+                    🧾 Bill
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
-
-      {selectedTable && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-xl relative">
-            <button 
-              onClick={() => setSelectedTable(null)}
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 font-bold"
-            >✕</button>
-            
-            <h2 className="text-3xl font-bold text-slate-900">{selectedTable.name}</h2>
-            <p className={`text-sm font-semibold uppercase tracking-wider mt-1 mb-6 ${selectedTable.status === "empty" ? "text-emerald-600" : "text-rose-600"}`}>
-              {selectedTable.status}
-            </p>
-            
-            {selectedTable.status === "empty" ? (
-              <button
-                onClick={() => handleOpenTable(selectedTable)}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg py-4 rounded-2xl shadow-sm transition-colors"
-              >
-               Mark as Occupied
-              </button>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => routeWithOrder("table")}
-                  className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300 font-bold text-lg py-4 rounded-2xl shadow-sm transition-colors"
-                >
-                  🍽️ Open Menu / Add Items
-                </button>
-                <button
-                  onClick={() => routeWithOrder("checkout")}
-                  className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold text-lg py-4 rounded-2xl shadow-sm transition-colors"
-                >
-                  View Bill & Checkout
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </main>
   );
 }

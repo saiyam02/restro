@@ -45,12 +45,10 @@ function MenuContent() {
   }, [orderId, router]);
 
   async function fetchData() {
-    // 1. Fetch Menu with Category names
     const { data: menuData } = await supabase
       .from("menu_items")
       .select(`id, name, price, is_available, menu_categories(name)`);
     
-    // 2. Fetch already ordered items for this table
     const { data: orderData } = await supabase
       .from("order_items")
       .select(`id, quantity, status, menu_items(name)`)
@@ -65,21 +63,10 @@ function MenuContent() {
 
   async function toggleServeStatus(itemId: string, currentStatus: string) {
     const newStatus = currentStatus === "served" ? "pending" : "served";
-    
-    // UI instantly update (Optimistic update)
     setExistingOrders(prev => prev.map(item => 
       item.id === itemId ? { ...item, status: newStatus } : item
     ));
-
-    // Database update
-    const { error } = await supabase
-      .from("order_items")
-      .update({ status: newStatus })
-      .eq("id", itemId);
-
-    if (error) {
-      alert("Status update fail ho gaya!");
-    }
+    await supabase.from("order_items").update({ status: newStatus }).eq("id", itemId);
   }
 
   const updateQty = (id: string, delta: number) => {
@@ -120,7 +107,6 @@ function MenuContent() {
     router.push("/");
   };
 
-  // Group items by category and filter by search query
   const groupedMenu = useMemo(() => {
     const filtered = menuItems.filter(item => 
       item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -136,7 +122,7 @@ function MenuContent() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
@@ -149,91 +135,94 @@ function MenuContent() {
 
   return (
     <>
-      <header className="mb-6 flex items-center justify-between sticky top-0 bg-slate-50 py-4 z-10">
+      {/* Edge-to-edge Header */}
+      <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-4 sticky top-0 z-20 flex justify-between items-center shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Table {tableId?.slice(0,4)}...</h1>
-          <p className="text-sm font-medium text-slate-500">Take Order</p>
+          <h1 className="text-xl md:text-2xl font-black text-slate-900">Table {tableId?.slice(0,4)}...</h1>
+          <p className="text-xs md:text-sm font-bold text-emerald-600 uppercase tracking-wide">Active Order</p>
         </div>
-        <button onClick={() => router.push("/")} className="text-slate-500 font-bold bg-slate-200 px-4 py-2 rounded-xl">Back</button>
+        <button onClick={() => router.push("/")} className="text-slate-600 font-bold bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
+          Back
+        </button>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-6 pb-32">
+      {/* Main Content Area - Fluid Width */}
+      <div className="px-4 md:px-6 mt-6 flex flex-col lg:flex-row gap-6 xl:gap-10">
         
         {/* LEFT SIDE: Menu & Search */}
-        <div className="flex-1 space-y-6">
-          {/* Search Bar */}
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Search items (e.g. Paneer...)" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 text-slate-900 font-medium py-3 px-4 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+        <div className="flex-1 w-full max-w-4xl mx-auto lg:mx-0">
+          <input 
+            type="text" 
+            placeholder="Search for Paneer, Dal, etc..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-slate-200 text-slate-900 font-medium py-3.5 px-5 rounded-2xl shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-8"
+          />
 
-          {/* Categorized Menu */}
           {Object.entries(groupedMenu).map(([category, items]) => (
-            <div key={category} className="space-y-3">
-              <h2 className="text-lg font-bold text-slate-800 border-b-2 border-slate-200 pb-1">{category}</h2>
-              {items.map((item) => {
-                const qty = cart[item.id] || 0;
-                return (
-                  <div key={item.id} className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center ${!item.is_available ? 'opacity-50' : ''}`}>
-                    <div>
-                      <h3 className="font-bold text-lg text-slate-800">
-                        {item.name} {(!item.is_available) && <span className="text-xs text-rose-500 bg-rose-50 px-2 py-1 rounded-md ml-2">Out of stock</span>}
-                      </h3>
-                      <p className="text-slate-500 font-medium">₹{item.price}</p>
-                    </div>
-                    
-                    {item.is_available && (
-                      qty === 0 ? (
-                        <button onClick={() => updateQty(item.id, 1)} className="bg-emerald-50 text-emerald-600 px-6 py-2 rounded-xl font-bold hover:bg-emerald-100 border border-emerald-200">ADD</button>
-                      ) : (
-                        <div className="flex items-center gap-4 bg-slate-50 border border-slate-200 rounded-xl p-1">
-                          <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center text-slate-600 font-bold bg-white rounded-lg shadow-sm">-</button>
-                          <span className="font-bold w-4 text-center">{qty}</span>
-                          <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center text-emerald-600 font-bold bg-white rounded-lg shadow-sm">+</button>
+            <div key={category} className="mb-8">
+              <h2 className="text-xl font-black text-slate-900 mb-4">{category}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {items.map((item) => {
+                  const qty = cart[item.id] || 0;
+                  return (
+                    <div key={item.id} className={`bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-start ${!item.is_available ? 'opacity-50 grayscale' : ''}`}>
+                      <div className="pr-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-slate-800 leading-tight">{item.name}</h3>
+                          {!item.is_available && <span className="text-[10px] font-black uppercase text-rose-500 bg-rose-50 px-2 py-0.5 rounded-sm">Sold Out</span>}
                         </div>
-                      )
-                    )}
-                  </div>
-                );
-              })}
+                        <p className="text-slate-500 font-semibold text-sm">₹{item.price}</p>
+                      </div>
+                      
+                      {item.is_available && (
+                        <div className="flex-shrink-0 mt-1">
+                          {qty === 0 ? (
+                            <button onClick={() => updateQty(item.id, 1)} className="bg-emerald-50 text-emerald-700 px-5 py-1.5 rounded-lg font-extrabold text-sm hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-sm w-20">
+                              ADD
+                            </button>
+                          ) : (
+                            <div className="flex items-center bg-emerald-50 border border-emerald-200 rounded-lg shadow-sm overflow-hidden w-20 h-8">
+                              <button onClick={() => updateQty(item.id, -1)} className="flex-1 h-full flex items-center justify-center text-emerald-700 font-extrabold hover:bg-emerald-100 transition-colors">-</button>
+                              <span className="font-black text-emerald-700 text-sm">{qty}</span>
+                              <button onClick={() => updateQty(item.id, 1)} className="flex-1 h-full flex items-center justify-center text-emerald-700 font-extrabold hover:bg-emerald-100 transition-colors">+</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
-          {Object.keys(groupedMenu).length === 0 && <p className="text-slate-500 text-center py-4">No items found.</p>}
+          {Object.keys(groupedMenu).length === 0 && <p className="text-slate-400 font-medium text-center py-10">No items match your search.</p>}
         </div>
 
         {/* RIGHT SIDE: Already Ordered Items */}
-        <div className="md:w-80 flex-shrink-0">
-          <div className="bg-slate-200/50 p-4 rounded-2xl border border-slate-200 sticky top-24">
-            <h2 className="font-bold text-slate-800 mb-3">Table Orders</h2>
+        <div className="w-full lg:w-96 flex-shrink-0">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 lg:sticky lg:top-24">
+            <h2 className="font-black text-slate-900 mb-4 text-lg border-b border-slate-100 pb-3">Sent to Kitchen</h2>
             {existingOrders.length === 0 ? (
-              <p className="text-sm text-slate-500 italic">No items ordered yet.</p>
+              <p className="text-sm text-slate-400 font-medium">Table is currently empty.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3 mt-4">
                 {existingOrders.map((order) => (
-                  <div key={order.id} className="flex justify-between items-center text-sm font-medium bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-100">
-                    
-                    {/* Item Name - Strike through agar served hai */}
+                  <div key={order.id} className="flex justify-between items-center text-sm font-medium bg-slate-50 px-3 py-2.5 rounded-xl border border-slate-100">
                     <span className={order.status === 'served' ? 'line-through text-slate-400' : 'text-slate-800'}>
-                      {order.quantity} x {order.menu_items?.name}
+                      <span className="font-black text-emerald-600 mr-2">{order.quantity} x</span>
+                      {order.menu_items?.name}
                     </span>
-                    
-                    {/* Mark Served Button */}
                     <button 
                       onClick={() => toggleServeStatus(order.id, order.status)}
-                      className={`text-xs px-3 py-1.5 rounded-md font-bold transition-all ${
+                      className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${
                         order.status === 'served' 
-                          ? 'bg-slate-100 text-slate-400' 
-                          : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                          ? 'bg-slate-200 text-slate-500' 
+                          : 'bg-orange-100 text-orange-700 hover:bg-orange-200 shadow-sm'
                       }`}
                     >
                       {order.status === 'served' ? 'Served' : 'Serve'}
                     </button>
-                    
                   </div>
                 ))}
               </div>
@@ -245,13 +234,13 @@ function MenuContent() {
 
       {/* Floating KOT Bar */}
       {totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-50">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-50">
           <button 
             onClick={sendKOT}
             disabled={isSubmitting}
-            className="w-full max-w-4xl mx-auto bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold text-lg py-4 rounded-2xl shadow-sm transition-colors flex justify-between items-center px-6"
+            className="w-full max-w-7xl mx-auto bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-black text-lg py-4 rounded-2xl shadow-lg transition-transform active:scale-[0.98] flex justify-between items-center px-6"
           >
-            <span>{totalItems} New Items</span>
+            <span>{totalItems} Items Added</span>
             <span>Send KOT (₹{cartTotal}) ➔</span>
           </button>
         </div>
@@ -262,8 +251,8 @@ function MenuContent() {
 
 export default function MenuPage() {
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-6 relative max-w-6xl mx-auto">
-      <Suspense fallback={<div className="text-center mt-20 font-bold text-slate-500">Loading Menu...</div>}>
+    <main className="min-h-screen bg-slate-50 relative pb-32">
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div></div>}>
         <MenuContent />
       </Suspense>
     </main>
