@@ -94,6 +94,7 @@ export default function WaiterDashboard() {
     }
 
     router.push(`/${path}/${selectedTable.id}?orderId=${data.id}`);
+    setSelectedTable(null);
   }
 
   if (loading) {
